@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from cyberdynedyndnscli import CyberdyneDynDns
+from time import sleep
+import os.path
+from configobj import ConfigObj
+
+config_file = "/etc/cyberdyne-dyndns/hostnames.ini"
+
+if os.path.isfile(config_file):
+    # print("Found config file")
+    config = ConfigObj(config_file)
+    try:
+        for domain in config:
+            print("Domain found: {}".format(domain))
+            if config[domain]['username'] and config[domain]['password']:
+                dyndns = CyberdyneDynDns(
+                    hostname=domain,
+                    username=config[domain]['username'],
+                    password=config[domain]['password'],
+                )
+
+                if config[domain]['server_address']:
+                    dyndns.server_address = config[domain]['server_address']
+
+                if dyndns.request_update() is False:
+                    print("ERROR: Domain update failed for: {}".format(domain))
+                else:
+                    print("OK: Domain update: {}".format(domain))
+                dyndns = None
+            else:
+                print("Domain '{}' found in config but has not all the keys and values required".format(domain))
+
+    except KeyError as e:
+        if e.args[0] is not "server_address":
+            print("Error ready configuration. key '{}' not found for domain {}".format(e.args[0], domain))
+        #else:
+        #    print("Domain {} has no special server address.".format(domain))
+    finally:
+        print("No more stuff to do")
+
+else:
+    print("No config file found in '{}'".format(config_file))
+
+
