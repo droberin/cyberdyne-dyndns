@@ -1,46 +1,97 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys
+import getopt
 from cyberdynedyndnscli import CyberdyneDynDns
 from time import sleep
 import os.path
 from configobj import ConfigObj
 
-config_file = "/etc/cyberdyne-dyndns/hostnames.ini"
+
+debug = False
+info = False
+
+test = CyberdyneDynDns()
+
+
+'''
+    dyndns = CyberdyneDynDns(
+    hostname="test.cyberdyne.es",
+    username="testuser",
+    password="dyndns",
+)
+dyndns.set("debug", True)
+dyndns.debug = True
+
+if not dyndns.request_update():
+    print("Error updating domain")
+
+exit(0)
+'''
+
+config_file = None
+
+opts, args = getopt.getopt(sys.argv[1:],"dic:",["config=", ])
+
+for opt, arg in opts:
+    if opt == '-d':
+        debug = True
+    elif opt == '-i':
+        info = True
+
+    if opt in ("-c", "--config"):
+        config_file = arg
+
+if not config_file:
+    config_file = "/etc/cyberdyne-dyndns/hostnames.ini"
+
 
 if os.path.isfile(config_file):
     # print("Found config file")
+
     config = ConfigObj(config_file)
     try:
+        if len(config) < 1:
+            print("ERROR: Configuration file is empty or not an ini file ({})".format(config_file))
+            sys.exit(1)
         for domain in config:
-            print("Domain found: {}".format(domain))
-            if config[domain]['username'] and config[domain]['password']:
+            if debug:
+                print("Domain found: {}".format(domain))
+
+            if 'username' in config[domain].keys() and 'password' in config[domain].keys():
                 dyndns = CyberdyneDynDns(
                     hostname=domain,
                     username=config[domain]['username'],
                     password=config[domain]['password'],
+                    debug=debug,
                 )
 
-                if config[domain]['server_address']:
-                    dyndns.server_address = config[domain]['server_address']
+                if 'provider' in config[domain].keys():
+                    if debug or info:
+                        if config[domain]['provider'] is dyndns.server_address:
+                            print("[{}]: Found an specific provider for domain in config..."
+                                  "yet, it's the same as the default one. x)'{}'".format(
+                                    domain, config[domain]['provider']))
+                        else:
+                            dyndns.server_address = config[domain]['provider']
+                            print("[{}]: Found a non default provider for domain '{}'".format(
+                                domain, config[domain]['provider']))
 
-                if dyndns.request_update() is False:
-                    print("ERROR: Domain update failed for: {}".format(domain))
+                if dyndns.request_update():
+                    if info or debug:
+                        print("[{}] Domain update: OK".format(domain))
                 else:
-                    print("OK: Domain update: {}".format(domain))
-                dyndns = None
+                    print("ERROR: Domain update failed for: {}".format(domain))
             else:
-                print("Domain '{}' found in config but has not all the keys and values required".format(domain))
+                print("['{}'] found in config but has not all the keys and values required".format(domain))
 
     except KeyError as e:
-        if e.args[0] is not "server_address":
-            print("Error ready configuration. key '{}' not found for domain {}".format(e.args[0], domain))
-        #else:
-        #    print("Domain {} has no special server address.".format(domain))
+            print("Error reading configuration. Key '{}' not found for domain {}".format(e.args[0], domain))
+            pass
     finally:
-        print("No more stuff to do")
+        if info or debug:
+            print("[CyberDyne-DynDNS] [UPDATER]: No more stuff to do")
 
 else:
     print("No config file found in '{}'".format(config_file))
-
-
